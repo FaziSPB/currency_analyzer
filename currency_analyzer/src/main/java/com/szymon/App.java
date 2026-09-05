@@ -17,10 +17,11 @@ import java.util.Map;
 
 public class App extends Application {
     private NbpService nbpService = new NbpService();
-    
+
     @Override
     public void start(Stage primaryStage) {
         Map<String, List<Rate>> ratesMap = nbpService.getGroupedRates();
+        Map<String, CurrencyStats> statsMap = nbpService.calculateStatsParallel(ratesMap);
         CategoryAxis xAxis = new CategoryAxis();
         xAxis.setLabel("Data");
         NumberAxis yAxis = new NumberAxis();
@@ -33,6 +34,8 @@ public class App extends Application {
         ComboBox<String> currencySelector = new ComboBox<>();
         currencySelector.setItems(FXCollections.observableArrayList(ratesMap.keySet()));
         currencySelector.setPromptText("Choose the currency...");
+        Label statsLabel = new Label("Choose the currency to see the stats.");
+        statsLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
         currencySelector.setOnAction(event -> {
             String selectedCode = currencySelector.getValue();
             if (selectedCode != null) {
@@ -44,11 +47,18 @@ public class App extends Application {
                 }
                 lineChart.getData().clear();
                 lineChart.getData().add(series);
+                CurrencyStats stats = statsMap.get(selectedCode);
+                if (stats != null) {
+                    statsLabel.setText(String.format(
+                        "Stats (30 days) -> Average: %.4f PLN | Max: %.4f PLN | Min: %.4f PLN",
+                        stats.avg(), stats.max(), stats.min()
+                    ));
+                }
             }
         });
         VBox root = new VBox(10);
         root.setPadding(new Insets(15));
-        root.getChildren().addAll(new Label("Choose the currency from the list:"), currencySelector, lineChart);
+        root.getChildren().addAll(new Label("Choose the currency from the list:"), currencySelector, lineChart, statsLabel);
         Scene scene = new Scene(root, 800, 600);
         primaryStage.setTitle("NBP Exchange Rates Analyzer");
         primaryStage.setScene(scene);

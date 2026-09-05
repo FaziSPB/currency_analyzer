@@ -6,6 +6,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.*;
+import java.util.stream.Collectors;
 
 record Rate(String currency, String code, double mid, String date) {
     public Rate(String currency, String code, double mid) {
@@ -13,6 +14,7 @@ record Rate(String currency, String code, double mid, String date) {
     }
 }
 record NbpTable(String table, String no, String effectiveDate, List<Rate> rates) {}
+record CurrencyStats(String code, double max, double min, double avg) {};
 
 public class NbpService {
     private final HttpClient client = HttpClient.newHttpClient();
@@ -41,5 +43,15 @@ public class NbpService {
             e.printStackTrace();
         }
         return groupedRates;
+    }
+    //multithreading
+    public Map<String, CurrencyStats> calculateStatsParallel(Map<String, List<Rate>> groupedRates) {
+        return groupedRates.entrySet().parallelStream()
+        .map(entry -> {
+            String code = entry.getKey();
+            List<Rate> rates = entry.getValue();
+            DoubleSummaryStatistics stats = rates.stream().mapToDouble(Rate::mid).summaryStatistics();
+            return new CurrencyStats(code, stats.getMax(), stats.getMin(), stats.getAverage());
+        }).collect(Collectors.toConcurrentMap(CurrencyStats::code, stats -> stats));
     }
 }
