@@ -36,6 +36,10 @@ A desktop app built with JavaFX that fetches historical currency exchange rates 
    ./mvnw javafx:run
    # Run from IDE
    Open the project and launch com.szymon.Main.java.
+   # Run from .exe
+   Download https://sourceforge.net/projects/launch4j/
+   Attach generated .jar file after launching Main (currency_analyzer\target\currency_analyzer-1.0-SNAPSHOT.jar)
+   Generate .exe file and launch it.
 <img width="967" height="667" alt="image" src="https://github.com/user-attachments/assets/bf52a602-1100-42a2-a862-cf64cea2f25c" />
 
    
