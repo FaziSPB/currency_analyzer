@@ -20,7 +20,7 @@ public class NbpService {
     private final HttpClient client = HttpClient.newHttpClient();
     private final ObjectMapper mapper = new ObjectMapper();
     public Map<String, List<Rate>> getGroupedRates() {
-        Map<String, List<Rate>> groupedRates = new HashMap<>();
+        Map<String, List<Rate>> groupedRates = new TreeMap<>();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://api.nbp.pl/api/exchangerates/tables/a/last/30/?format=json"))
                 .build();
