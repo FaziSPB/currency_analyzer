@@ -16,7 +16,8 @@ record Rate(String currency, String code, double mid, String date) {
     }
 }
 record NbpTable(String table, String no, String effectiveDate, List<Rate> rates) {}
-record CurrencyStats(String code, double max, double min, double avg) {};
+record CurrencyStats(String code, double avg, double min, String minDate, double max, String maxDate,
+                     double stdDev, double changePercent) {}
 
 public class NbpService {
     private final HttpClient client = HttpClient.newBuilder()
@@ -52,11 +53,29 @@ public class NbpService {
     //multithreading
     public Map<String, CurrencyStats> calculateStatsParallel(Map<String, List<Rate>> groupedRates) {
         return groupedRates.entrySet().parallelStream()
-        .map(entry -> {
-            String code = entry.getKey();
-            List<Rate> rates = entry.getValue();
-            DoubleSummaryStatistics stats = rates.stream().mapToDouble(Rate::mid).summaryStatistics();
-            return new CurrencyStats(code, stats.getMax(), stats.getMin(), stats.getAverage());
-        }).collect(Collectors.toConcurrentMap(CurrencyStats::code, stats -> stats));
+        .map(entry -> calculateStats(entry.getKey(), entry.getValue()))
+        .collect(Collectors.toConcurrentMap(CurrencyStats::code, stats -> stats));
+    }
+
+    // rates are expected in chronological order (as returned by the NBP API)
+    private CurrencyStats calculateStats(String code, List<Rate> rates) {
+        double avg = rates.stream().mapToDouble(Rate::mid).average().orElse(0);
+        Rate minRate = rates.stream().min(Comparator.comparingDouble(Rate::mid)).orElseThrow();
+        Rate maxRate = rates.stream().max(Comparator.comparingDouble(Rate::mid)).orElseThrow();
+        double variance = rates.stream().mapToDouble(rate -> Math.pow(rate.mid() - avg, 2)).average().orElse(0);
+        double first = rates.get(0).mid();
+        double last = rates.get(rates.size() - 1).mid();
+        return new CurrencyStats(code, avg, minRate.mid(), minRate.date(), maxRate.mid(), maxRate.date(),
+                Math.sqrt(variance), (last - first) / first * 100);
+    }
+
+    public List<Rate> movingAverage(List<Rate> rates, int window) {
+        List<Rate> result = new ArrayList<>();
+        for (int i = window - 1; i < rates.size(); i++) {
+            double avg = rates.subList(i - window + 1, i + 1).stream().mapToDouble(Rate::mid).average().orElse(0);
+            Rate rate = rates.get(i);
+            result.add(new Rate(rate.currency(), rate.code(), avg, rate.date()));
+        }
+        return result;
     }
 }

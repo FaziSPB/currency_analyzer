@@ -12,13 +12,16 @@ import javafx.scene.chart.LineChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +29,7 @@ import java.util.Objects;
 
 public class App extends Application {
     private record LoadedData(Map<String, List<Rate>> ratesMap, Map<String, CurrencyStats> statsMap) {}
+    private static final int MOVING_AVERAGE_WINDOW = 5;
 
     private NbpService nbpService = new NbpService();
     private Map<String, List<Rate>> ratesMap = Map.of();
@@ -38,6 +42,7 @@ public class App extends Application {
     private ProgressIndicator progressIndicator;
     private Label statusLabel;
     private Label statsLabel;
+    private CheckBox movingAverageCheckBox;
 
     @Override
     public void start(Stage primaryStage) {
@@ -63,11 +68,15 @@ public class App extends Application {
         statusLabel = new Label();
         HBox toolbar = new HBox(10, currencySelector, refreshButton, progressIndicator, statusLabel);
         toolbar.setAlignment(Pos.CENTER_LEFT);
+        movingAverageCheckBox = new CheckBox("Show " + MOVING_AVERAGE_WINDOW + "-day moving average");
+        movingAverageCheckBox.setOnAction(event -> showCurrency(currencySelector.getValue()));
+        HBox chartOptions = new HBox(10, movingAverageCheckBox);
+        chartOptions.setAlignment(Pos.CENTER_LEFT);
         statsLabel = new Label("Choose the currency to see the stats.");
         statsLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
         VBox root = new VBox(10);
         root.setPadding(new Insets(15));
-        root.getChildren().addAll(new Label("Choose the currency from the list:"), toolbar, lineChart, statsLabel);
+        root.getChildren().addAll(new Label("Choose the currency from the list:"), toolbar, lineChart, chartOptions, statsLabel);
         Scene scene = new Scene(root, 900, 650);
         primaryStage.setTitle("NBP Exchange Rates Analyzer");
         primaryStage.setScene(scene);
@@ -125,12 +134,32 @@ public class App extends Application {
             series.getData().add(new XYChart.Data<>(rate.date(), rate.mid()));
         }
         lineChart.getData().add(series);
+        installTooltips(series);
+        if (movingAverageCheckBox.isSelected() && selectedRates.size() >= MOVING_AVERAGE_WINDOW) {
+            XYChart.Series<String, Number> averageSeries = new XYChart.Series<>();
+            averageSeries.setName(MOVING_AVERAGE_WINDOW + "-day moving average");
+            for (Rate rate : nbpService.movingAverage(selectedRates, MOVING_AVERAGE_WINDOW)) {
+                averageSeries.getData().add(new XYChart.Data<>(rate.date(), rate.mid()));
+            }
+            lineChart.getData().add(averageSeries);
+            averageSeries.getData().forEach(point -> point.getNode().setVisible(false));
+        }
         CurrencyStats stats = statsMap.get(code);
         if (stats != null) {
             statsLabel.setText(String.format(
-                "Stats (30 days) -> Average: %.4f PLN | Max: %.4f PLN | Min: %.4f PLN",
-                stats.avg(), stats.max(), stats.min()
+                "Stats (30 days) -> Average: %.4f PLN | Min: %.4f PLN (%s) | Max: %.4f PLN (%s)%n"
+                    + "Std deviation: %.4f PLN | Change: %+.2f%%",
+                stats.avg(), stats.min(), stats.minDate(), stats.max(), stats.maxDate(),
+                stats.stdDev(), stats.changePercent()
             ));
+        }
+    }
+
+    private void installTooltips(XYChart.Series<String, Number> series) {
+        for (XYChart.Data<String, Number> point : series.getData()) {
+            Tooltip tooltip = new Tooltip(String.format("%s%n%.4f PLN", point.getXValue(), point.getYValue().doubleValue()));
+            tooltip.setShowDelay(Duration.millis(100));
+            Tooltip.install(point.getNode(), tooltip);
         }
     }
 
