@@ -20,6 +20,7 @@ record CurrencyStats(String code, double avg, double min, String minDate, double
                      double stdDev, double changePercent) {}
 
 public class NbpService {
+    public static final String BASE_CURRENCY = "PLN";
     private final HttpClient client = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
@@ -77,5 +78,21 @@ public class NbpService {
             result.add(new Rate(rate.currency(), rate.code(), avg, rate.date()));
         }
         return result;
+    }
+
+    // price of one unit of the currency in PLN, based on the most recent table
+    public double latestRate(String code, Map<String, List<Rate>> groupedRates) {
+        if (BASE_CURRENCY.equals(code)) {
+            return 1.0;
+        }
+        List<Rate> rates = groupedRates.get(code);
+        if (rates == null || rates.isEmpty()) {
+            throw new IllegalArgumentException("Unknown currency: " + code);
+        }
+        return rates.get(rates.size() - 1).mid();
+    }
+
+    public double convert(double amount, String fromCode, String toCode, Map<String, List<Rate>> groupedRates) {
+        return amount * latestRate(fromCode, groupedRates) / latestRate(toCode, groupedRates);
     }
 }

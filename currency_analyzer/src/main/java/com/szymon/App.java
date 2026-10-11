@@ -43,6 +43,7 @@ public class App extends Application {
     private Label statusLabel;
     private Label statsLabel;
     private CheckBox movingAverageCheckBox;
+    private ConverterPane converterPane;
 
     @Override
     public void start(Stage primaryStage) {
@@ -74,10 +75,12 @@ public class App extends Application {
         chartOptions.setAlignment(Pos.CENTER_LEFT);
         statsLabel = new Label("Choose the currency to see the stats.");
         statsLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+        converterPane = new ConverterPane(nbpService);
         VBox root = new VBox(10);
         root.setPadding(new Insets(15));
-        root.getChildren().addAll(new Label("Choose the currency from the list:"), toolbar, lineChart, chartOptions, statsLabel);
-        Scene scene = new Scene(root, 900, 650);
+        root.getChildren().addAll(new Label("Choose the currency from the list:"), toolbar, lineChart, chartOptions,
+                statsLabel, converterPane);
+        Scene scene = new Scene(root, 900, 720);
         primaryStage.setTitle("NBP Exchange Rates Analyzer");
         primaryStage.setScene(scene);
         primaryStage.show();
@@ -118,6 +121,7 @@ public class App extends Application {
             currencySelector.setValue(selectedCode);
         }
         showCurrency(currencySelector.getValue());
+        converterPane.setRates(ratesMap);
         updateStatus();
     }
 
