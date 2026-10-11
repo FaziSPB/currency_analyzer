@@ -1,10 +1,12 @@
 package com.szymon;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -17,30 +19,33 @@ record NbpTable(String table, String no, String effectiveDate, List<Rate> rates)
 record CurrencyStats(String code, double max, double min, double avg) {};
 
 public class NbpService {
-    private final HttpClient client = HttpClient.newHttpClient();
+    private final HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
     private final ObjectMapper mapper = new ObjectMapper();
-    public Map<String, List<Rate>> getGroupedRates() {
+    public Map<String, List<Rate>> getGroupedRates() throws IOException, InterruptedException {
         Map<String, List<Rate>> groupedRates = new TreeMap<>();
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://api.nbp.pl/api/exchangerates/tables/a/last/30/?format=json"))
+                .uri(URI.create("https://api.nbp.pl/api/exchangerates/tables/a/last/30/?format=json"))
+                .header("Accept", "application/json")
+                .timeout(Duration.ofSeconds(15))
                 .build();
-        try {
-            String body = client.send(request, HttpResponse.BodyHandlers.ofString()).body();
-            NbpTable[] tables = mapper.readValue(body, NbpTable[].class);
-            for (NbpTable table : tables) {
-                for (Rate rawRate : table.rates()) {
-                    Rate rateWithDate = new Rate(
-                        rawRate.currency(), 
-                        rawRate.code(), 
-                        rawRate.mid(), 
-                        table.effectiveDate()
-                    );
-                    groupedRates.putIfAbsent(rateWithDate.code(), new ArrayList<>());
-                    groupedRates.get(rateWithDate.code()).add(rateWithDate);
-                }
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            throw new IOException("NBP API returned HTTP " + response.statusCode());
+        }
+        NbpTable[] tables = mapper.readValue(response.body(), NbpTable[].class);
+        for (NbpTable table : tables) {
+            for (Rate rawRate : table.rates()) {
+                Rate rateWithDate = new Rate(
+                    rawRate.currency(),
+                    rawRate.code(),
+                    rawRate.mid(),
+                    table.effectiveDate()
+                );
+                groupedRates.putIfAbsent(rateWithDate.code(), new ArrayList<>());
+                groupedRates.get(rateWithDate.code()).add(rateWithDate);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
         return groupedRates;
     }
