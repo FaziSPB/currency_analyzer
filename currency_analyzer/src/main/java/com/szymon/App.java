@@ -19,9 +19,12 @@ import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +35,7 @@ public class App extends Application {
     private static final int MOVING_AVERAGE_WINDOW = 5;
 
     private NbpService nbpService = new NbpService();
+    private ExportService exportService = new ExportService();
     private Map<String, List<Rate>> ratesMap = Map.of();
     private Map<String, CurrencyStats> statsMap = Map.of();
 
@@ -44,6 +48,8 @@ public class App extends Application {
     private Label statsLabel;
     private CheckBox movingAverageCheckBox;
     private ConverterPane converterPane;
+    private Button exportCsvButton;
+    private Button exportPngButton;
 
     @Override
     public void start(Stage primaryStage) {
@@ -71,7 +77,15 @@ public class App extends Application {
         toolbar.setAlignment(Pos.CENTER_LEFT);
         movingAverageCheckBox = new CheckBox("Show " + MOVING_AVERAGE_WINDOW + "-day moving average");
         movingAverageCheckBox.setOnAction(event -> showCurrency(currencySelector.getValue()));
-        HBox chartOptions = new HBox(10, movingAverageCheckBox);
+        exportCsvButton = new Button("Export CSV");
+        exportCsvButton.setOnAction(event -> exportCsv());
+        exportCsvButton.setDisable(true);
+        exportPngButton = new Button("Export PNG");
+        exportPngButton.setOnAction(event -> exportPng());
+        exportPngButton.setDisable(true);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox chartOptions = new HBox(10, movingAverageCheckBox, spacer, exportCsvButton, exportPngButton);
         chartOptions.setAlignment(Pos.CENTER_LEFT);
         statsLabel = new Label("Choose the currency to see the stats.");
         statsLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
@@ -128,6 +142,8 @@ public class App extends Application {
     private void showCurrency(String code) {
         lineChart.getData().clear();
         List<Rate> selectedRates = code == null ? null : ratesMap.get(code);
+        exportCsvButton.setDisable(selectedRates == null);
+        exportPngButton.setDisable(selectedRates == null);
         if (selectedRates == null) {
             statsLabel.setText("Choose the currency to see the stats.");
             return;
@@ -165,6 +181,48 @@ public class App extends Application {
             tooltip.setShowDelay(Duration.millis(100));
             Tooltip.install(point.getNode(), tooltip);
         }
+    }
+
+    private void exportCsv() {
+        String code = currencySelector.getValue();
+        if (code == null || !ratesMap.containsKey(code)) {
+            return;
+        }
+        File file = chooseSaveFile("Export rates to CSV", code + "_rates.csv", "CSV files", "*.csv");
+        if (file == null) {
+            return;
+        }
+        try {
+            exportService.exportCsv(file, ratesMap.get(code), statsMap.get(code));
+            statusLabel.setText("Saved " + file.getAbsolutePath());
+        } catch (IOException e) {
+            showError("Could not save the CSV file.", e);
+        }
+    }
+
+    private void exportPng() {
+        String code = currencySelector.getValue();
+        if (code == null) {
+            return;
+        }
+        File file = chooseSaveFile("Export chart to PNG", code + "_chart.png", "PNG images", "*.png");
+        if (file == null) {
+            return;
+        }
+        try {
+            exportService.exportPng(file, lineChart);
+            statusLabel.setText("Saved " + file.getAbsolutePath());
+        } catch (IOException e) {
+            showError("Could not save the PNG file.", e);
+        }
+    }
+
+    private File chooseSaveFile(String title, String fileName, String description, String extension) {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle(title);
+        fileChooser.setInitialFileName(fileName);
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(description, extension));
+        return fileChooser.showSaveDialog(primaryStage);
     }
 
     private void updateStatus() {
